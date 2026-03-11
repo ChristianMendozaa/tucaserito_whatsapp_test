@@ -40,41 +40,43 @@ export default function Home() {
     setStatus("Abriendo ventana de Meta...");
     // Configuración específica para Embedded Signup de WhatsApp
     // Documentación: https://developers.facebook.com/docs/whatsapp/embedded-signup/
-    (window as any).FB.login(async (response: any) => {
+    
+    // Meta FB.login API no soporta una función asíncrona ("async (response) =>") directamente como callback.
+    // Usamos una función normal y manejamos lo asíncrono adentro.
+    (window as any).FB.login((response: any) => {
       if (response.authResponse) {
         const code = response.authResponse.code;
         setStatus(`Autorizado en Meta. Enviando token temporal al servidor...`);
         
-        try {
-           // EXTRAER IDs NECESARIOS. 
-           // Dependiendo de tu implementación, puedes obtener `client_id` de la sesión del usuario.
-           // Aquí simularemos un client_id fijo para la prueba.
-           const dummyClientId = "CLIENT_001";
+        // Creamos una función asíncrona interna y la ejecutamos
+        const sendTokenToBackend = async () => {
+            try {
+               const dummyClientId = "CLIENT_001";
+               const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+               
+               const res = await fetch(`${apiUrl}/api/auth/oauth_callback?client_id=${dummyClientId}&token_code=${code}&phone_number_id=dummy_phone&waba_id=dummy_waba`, {
+                 method: 'POST',
+                 headers: {
+                     'Content-Type': 'application/json'
+                 }
+               });
            
-           // El waba_id y phone_number_id suelen venir en otro step del flujo o se consultan con GraphAPI,
-           // pero si los tienes de antemano o los extraes del token de Meta, deberás pasarlos aquí.
-           // (Nota: Meta recomienda un endpoint server-to-server para esto, como lo has hecho en auth.py).
-           const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-           
-           const res = await fetch(`${apiUrl}/api/auth/oauth_callback?client_id=${dummyClientId}&token_code=${code}&phone_number_id=dummy_phone&waba_id=dummy_waba`, {
-             method: 'POST',
-             headers: {
-                 'Content-Type': 'application/json'
-             }
-           });
-           
-           if (res.ok) {
-               const data = await res.json();
-               setStatus(`¡Éxito! WhatsApp vinculado correctamente a tu cuenta.`);
-               console.log("Respuesta del servidor:", data);
-           } else {
-               const errorData = await res.json();
-               setStatus(`Error al vincular: ${errorData.detail || 'Fallo desconocido'}`);
-           }
-        } catch (error) {
-            console.error("Fetch error:", error);
-            setStatus("Error de conexión con el servidor backend.");
-        }
+               if (res.ok) {
+                   const data = await res.json();
+                   setStatus(`¡Éxito! WhatsApp vinculado correctamente a tu cuenta.`);
+                   console.log("Respuesta del servidor:", data);
+               } else {
+                   const errorData = await res.json();
+                   setStatus(`Error al vincular: ${errorData.detail || 'Fallo desconocido'}`);
+               }
+            } catch (error) {
+                console.error("Fetch error:", error);
+                setStatus("Error de conexión con el servidor backend.");
+            }
+        };
+        
+        // Ejecutamos la función interna
+        sendTokenToBackend();
         
       } else {
         setStatus("El usuario canceló el inicio de sesión o no lo autorizó.");
